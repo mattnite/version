@@ -32,6 +32,19 @@ pub const Semver = struct {
         return (single_parser(str) orelse return error.InvalidString).value;
     }
 
+    pub fn format(
+        self: Semver,
+        comptime fmt: []const u8,
+        options: std.fmt.FormatOptions,
+        writer: anytype,
+    ) @TypeOf(writer).Error!void {
+        try writer.print("{}.{}.{}", .{
+            self.major,
+            self.minor,
+            self.patch,
+        });
+    }
+
     pub fn cmp(self: Semver, other: Semver) std.math.Order {
         return if (self.major != other.major)
             std.math.order(self.major, other.major)
@@ -42,7 +55,7 @@ pub const Semver = struct {
     }
 
     pub fn inside(self: Semver, range: Range) bool {
-        return self.cmp(range.min).compare(.gte) and self.cmp(range.less_than).compare(.lt);
+        return self.cmp(range.min).compare(.gte) and self.cmp(range.lessThan()).compare(.lt);
     }
 };
 
@@ -68,78 +81,94 @@ test "regular semver" {
     expectEqual(expected, try Semver.parse("1.2.3"));
 }
 
+test "semver formatting" {
+    var buf: [80]u8 = undefined;
+    var stream = std.io.fixedBufferStream(&buf);
+    const semver = Semver{ .major = 4, .minor = 2, .patch = 1 };
+    try stream.writer().print("{}", .{semver});
+
+    expectEqualStrings("4.2.1", stream.getWritten());
+}
+
 pub const Range = struct {
     min: Semver,
-    less_than: Semver,
+    kind: Kind,
+
+    pub const Kind = enum {
+        approx,
+        caret,
+        exact,
+    };
 
     const parser = map(
         Range,
         toRange,
         combine(.{
-            opt(oneOf(.{ utf8.range('~', '~'), utf8.range('^', '^') })),
+            opt(
+                oneOf(.{
+                    utf8.range('~', '~'),
+                    utf8.range('^', '^'),
+                }),
+            ),
             Semver.semver,
-            opt(combine(.{ utf8.char('-'), Semver.semver })),
         }),
     );
 
     fn toRange(tuple: anytype) Range {
-        const Kind = enum {
-            approx,
-            carot,
-            explicit,
-            exact,
-        };
-
         const kind: Kind = if (tuple[0]) |char|
-            if (char == '~') Kind.approx else if (char == '^') Kind.carot else unreachable
-        else if (tuple[2] != null)
-            Kind.explicit
+            if (char == '~') Kind.approx else if (char == '^') Kind.caret else unreachable
         else
             Kind.exact;
 
         return Range{
+            .kind = kind,
             .min = Semver{
                 .major = tuple[1][0],
                 .minor = tuple[1][1],
                 .patch = tuple[1][2],
             },
-            .less_than = switch (kind) {
-                .approx => Semver{
-                    .major = tuple[1][0],
-                    .minor = tuple[1][1] + 1,
-                    .patch = 0,
-                },
-                .carot => Semver{
-                    .major = tuple[1][0] + 1,
-                    .minor = 0,
-                    .patch = 0,
-                },
-                .explicit => Semver{
-                    .major = tuple[2].?[0],
-                    .minor = tuple[2].?[1],
-                    .patch = tuple[2].?[2] + 1,
-                },
-                .exact => Semver{
-                    .major = tuple[1][0],
-                    .minor = tuple[1][1],
-                    .patch = tuple[1][2] + 1,
-                },
+        };
+    }
+
+    fn lessThan(self: Range) Semver {
+        return switch (self.kind) {
+            .exact => .{
+                .major = self.min.major,
+                .minor = self.min.minor,
+                .patch = self.min.patch + 1,
+            },
+            .approx => .{
+                .major = self.min.major,
+                .minor = self.min.minor + 1,
+                .patch = 0,
+            },
+            .caret => .{
+                .major = self.min.major + 1,
+                .minor = 0,
+                .patch = 0,
             },
         };
     }
 
     pub fn parse(str: []const u8) !Range {
-        if (mem.indexOf(u8, str, "-") != null and (mem.indexOf(u8, str, "~") != null or mem.indexOf(u8, str, "^") != null))
-            return error.InvalidString;
+        return (parser(str) orelse return error.InvalidString).value;
+    }
 
-        const range = (parser(str) orelse return error.InvalidString).value;
-        if (range.min.cmp(range.less_than) != .lt) return error.BadOrder;
-
-        return range;
+    pub fn format(
+        self: Range,
+        comptime fmt: []const u8,
+        options: std.fmt.FormatOptions,
+        writer: anytype,
+    ) @TypeOf(writer).Error!void {
+        switch (self.kind) {
+            .exact => try writer.print("{}", .{self.min}),
+            .approx => try writer.print("~{}", .{self.min}),
+            .caret => try writer.print("^{}", .{self.min}),
+        }
     }
 
     pub fn contains(self: Range, semver: Semver) bool {
-        return semver.inside(range);
+        return semver.inside(self);
     }
 };
 
@@ -149,15 +178,11 @@ test "empty string" {
 
 test "approximate" {
     const expected = Range{
+        .kind = .approx,
         .min = Semver{
             .major = 1,
             .minor = 2,
             .patch = 3,
-        },
-        .less_than = Semver{
-            .major = 1,
-            .minor = 3,
-            .patch = 0,
         },
     };
     expectEqual(expected, try Range.parse("~1.2.3"));
@@ -165,48 +190,72 @@ test "approximate" {
 
 test "caret" {
     const expected = Range{
+        .kind = .caret,
         .min = Semver{
             .major = 1,
             .minor = 2,
             .patch = 3,
-        },
-        .less_than = Semver{
-            .major = 2,
-            .minor = 0,
-            .patch = 0,
         },
     };
     expectEqual(expected, try Range.parse("^1.2.3"));
 }
 
-test "explicit range" {
-    const expected = Range{
-        .min = Semver{
-            .major = 1,
-            .minor = 2,
-            .patch = 3,
-        },
-        .less_than = Semver{
-            .major = 2,
-            .minor = 3,
-            .patch = 6,
-        },
-    };
-    expectEqual(expected, try Range.parse("1.2.3-2.3.5"));
-}
-
 test "exact range" {
     const expected = Range{
+        .kind = .exact,
         .min = Semver{
             .major = 1,
             .minor = 2,
             .patch = 3,
-        },
-        .less_than = Semver{
-            .major = 1,
-            .minor = 2,
-            .patch = 4,
         },
     };
     expectEqual(expected, try Range.parse("1.2.3"));
+}
+
+test "range formatting: exact" {
+    var buf: [80]u8 = undefined;
+    var stream = std.io.fixedBufferStream(&buf);
+    const range = Range{
+        .kind = .exact,
+        .min = Semver{
+            .major = 1,
+            .minor = 2,
+            .patch = 3,
+        },
+    };
+    try stream.writer().print("{}", .{range});
+
+    expectEqualStrings("1.2.3", stream.getWritten());
+}
+
+test "range formatting: approx" {
+    var buf: [80]u8 = undefined;
+    var stream = std.io.fixedBufferStream(&buf);
+    const range = Range{
+        .kind = .approx,
+        .min = Semver{
+            .major = 1,
+            .minor = 2,
+            .patch = 3,
+        },
+    };
+    try stream.writer().print("{}", .{range});
+
+    expectEqualStrings("~1.2.3", stream.getWritten());
+}
+
+test "range formatting: caret" {
+    var buf: [80]u8 = undefined;
+    var stream = std.io.fixedBufferStream(&buf);
+    const range = Range{
+        .kind = .caret,
+        .min = Semver{
+            .major = 1,
+            .minor = 2,
+            .patch = 3,
+        },
+    };
+    try stream.writer().print("{}", .{range});
+
+    expectEqualStrings("^1.2.3", stream.getWritten());
 }
