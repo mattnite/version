@@ -3,11 +3,6 @@ const Builder = std.build.Builder;
 const Pkg = std.build.Pkg;
 const pkgs = @import("gyro").pkgs;
 
-const mecha = Pkg{
-    .name = "mecha",
-    .path = "../mecha/mecha.zig",
-};
-
 pub fn build(b: *Builder) void {
     const mode = b.standardReleaseOptions();
     const lib = b.addStaticLibrary("version", "src/main.zig");
@@ -17,7 +12,7 @@ pub fn build(b: *Builder) void {
 
     var main_tests = b.addTest("src/main.zig");
     main_tests.setBuildMode(mode);
-    main_tests.addPackage(mecha);
+    main_tests.addPackage(pkgs.mecha);
 
     const test_step = b.step("test", "Run library tests");
     test_step.dependOn(&main_tests.step);

@@ -90,6 +90,24 @@ test "semver formatting" {
     expectEqualStrings("4.2.1", stream.getWritten());
 }
 
+test "semver contains/inside range" {
+    const range_pre = try Range.parse("^0.4.1");
+    const range_post = try Range.parse("^1.4.1");
+
+    expect(!range_pre.contains(try Semver.parse("0.2.0")));
+    expect(!range_pre.contains(try Semver.parse("0.4.0")));
+    expect(!range_pre.contains(try Semver.parse("0.5.0")));
+    expect(range_pre.contains(try Semver.parse("0.4.2")));
+    expect(range_pre.contains(try Semver.parse("0.4.128")));
+
+    expect(!range_post.contains(try Semver.parse("1.2.0")));
+    expect(!range_post.contains(try Semver.parse("1.4.0")));
+    expect(!range_post.contains(try Semver.parse("2.0.0")));
+    expect(range_post.contains(try Semver.parse("1.5.0")));
+    expect(range_post.contains(try Semver.parse("1.4.2")));
+    expect(range_post.contains(try Semver.parse("1.4.128")));
+}
+
 pub const Range = struct {
     min: Semver,
     kind: Kind,
@@ -132,17 +150,21 @@ pub const Range = struct {
 
     fn lessThan(self: Range) Semver {
         return switch (self.kind) {
-            .exact => .{
+            .exact => Semver{
                 .major = self.min.major,
                 .minor = self.min.minor,
                 .patch = self.min.patch + 1,
             },
-            .approx => .{
+            .approx => Semver{
                 .major = self.min.major,
                 .minor = self.min.minor + 1,
                 .patch = 0,
             },
-            .caret => .{
+            .caret => if (self.min.major == 0) Semver{
+                .major = self.min.major,
+                .minor = self.min.minor + 1,
+                .patch = 0,
+            } else Semver{
                 .major = self.min.major + 1,
                 .minor = 0,
                 .patch = 0,
