@@ -5,9 +5,5 @@ pkgs:
     license: MIT
     source_url: "https://github.com/mattnite/version"
     tags: semver
-    files:
-      README.md
-      LICENSE
-      build.zig
 deps:
-  mattnite/mecha: ^0.0.0
+  Hejsil/mecha: ^0.4.0

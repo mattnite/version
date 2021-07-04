@@ -38,6 +38,8 @@ pub const Semver = struct {
         options: std.fmt.FormatOptions,
         writer: anytype,
     ) @TypeOf(writer).Error!void {
+        _ = fmt;
+        _ = options;
         try writer.print("{}.{}.{}", .{
             self.major,
             self.minor,
@@ -182,6 +184,8 @@ pub const Range = struct {
         options: std.fmt.FormatOptions,
         writer: anytype,
     ) @TypeOf(writer).Error!void {
+        _ = fmt;
+        _ = options;
         switch (self.kind) {
             .exact => try writer.print("{}", .{self.min}),
             .approx => try writer.print("~{}", .{self.min}),
