@@ -1,6 +1,6 @@
 pkgs:
   version:
-    version: 0.0.1
+    version: 0.0.2
     description: small library for semver
     license: MIT
     source_url: "https://github.com/mattnite/version"
