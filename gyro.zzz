@@ -1,9 +1,15 @@
 pkgs:
   version:
-    version: 0.0.2
+    version: 0.1.0
     description: small library for semver
     license: MIT
     source_url: "https://github.com/mattnite/version"
     tags: semver
 deps:
-  Hejsil/mecha: ^0.4.0
+  mecha:
+    src:
+      github:
+        user: Hejsil
+        repo: mecha
+        ref: zig-master
+    root: mecha.zig

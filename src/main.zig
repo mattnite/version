@@ -1,35 +1,36 @@
 const std = @import("std");
 const mecha = @import("mecha");
+
+const testing = std.testing;
 const mem = std.mem;
-usingnamespace @import("mecha");
-usingnamespace std.testing;
+const Allocator = mem.Allocator;
 
 pub const Semver = struct {
     major: u64,
     minor: u64,
     patch: u64,
 
-    const semver = combine(.{
-        int(u64, 10),
-        utf8.char('.'),
-        int(u64, 10),
-        utf8.char('.'),
-        int(u64, 10),
+    const semver = mecha.combine(.{
+        mecha.int(u64, .{ .base = 10 }),
+        mecha.utf8.char('.'),
+        mecha.int(u64, .{ .base = 10 }),
+        mecha.utf8.char('.'),
+        mecha.int(u64, .{ .base = 10 }),
     });
 
-    const parser = map(Semver, toStruct(Semver), semver);
+    const parser = mecha.map(Semver, mecha.toStruct(Semver), semver);
 
-    const single_parser = map(
+    const single_parser = mecha.map(
         Semver,
-        toStruct(Semver),
-        combine(.{
+        mecha.toStruct(Semver),
+        mecha.combine(.{
             semver,
-            eos,
+            mecha.eos,
         }),
     );
 
-    pub fn parse(str: []const u8) !Semver {
-        return (single_parser(str) orelse return error.InvalidString).value;
+    pub fn parse(allocator: *Allocator, str: []const u8) !Semver {
+        return (try single_parser(allocator, str)).value;
     }
 
     pub fn format(
@@ -62,25 +63,25 @@ pub const Semver = struct {
 };
 
 test "empty string" {
-    expectError(error.InvalidString, Semver.parse(""));
+    try testing.expectError(error.ParserFailed, Semver.parse(testing.allocator, ""));
 }
 
 test "bad strings" {
-    expectError(error.InvalidString, Semver.parse("1"));
-    expectError(error.InvalidString, Semver.parse("1."));
-    expectError(error.InvalidString, Semver.parse("1.2"));
-    expectError(error.InvalidString, Semver.parse("1.2."));
-    expectError(error.InvalidString, Semver.parse("1.-2.3"));
-    expectError(error.InvalidString, Semver.parse("^1.2.3-3.4.5"));
+    try testing.expectError(error.ParserFailed, Semver.parse(testing.allocator, "1"));
+    try testing.expectError(error.ParserFailed, Semver.parse(testing.allocator, "1."));
+    try testing.expectError(error.ParserFailed, Semver.parse(testing.allocator, "1.2"));
+    try testing.expectError(error.ParserFailed, Semver.parse(testing.allocator, "1.2."));
+    try testing.expectError(error.ParserFailed, Semver.parse(testing.allocator, "1.-2.3"));
+    try testing.expectError(error.ParserFailed, Semver.parse(testing.allocator, "^1.2.3-3.4.5"));
 }
 
 test "semver-suffix" {
-    expectError(error.InvalidString, Semver.parse("1.2.3-dev"));
+    try testing.expectError(error.ParserFailed, Semver.parse(testing.allocator, "1.2.3-dev"));
 }
 
 test "regular semver" {
     const expected = Semver{ .major = 1, .minor = 2, .patch = 3 };
-    expectEqual(expected, try Semver.parse("1.2.3"));
+    try testing.expectEqual(expected, try Semver.parse(testing.allocator, "1.2.3"));
 }
 
 test "semver formatting" {
@@ -89,25 +90,25 @@ test "semver formatting" {
     const semver = Semver{ .major = 4, .minor = 2, .patch = 1 };
     try stream.writer().print("{}", .{semver});
 
-    expectEqualStrings("4.2.1", stream.getWritten());
+    try testing.expectEqualStrings("4.2.1", stream.getWritten());
 }
 
 test "semver contains/inside range" {
-    const range_pre = try Range.parse("^0.4.1");
-    const range_post = try Range.parse("^1.4.1");
+    const range_pre = try Range.parse(testing.allocator, "^0.4.1");
+    const range_post = try Range.parse(testing.allocator, "^1.4.1");
 
-    expect(!range_pre.contains(try Semver.parse("0.2.0")));
-    expect(!range_pre.contains(try Semver.parse("0.4.0")));
-    expect(!range_pre.contains(try Semver.parse("0.5.0")));
-    expect(range_pre.contains(try Semver.parse("0.4.2")));
-    expect(range_pre.contains(try Semver.parse("0.4.128")));
+    try testing.expect(!range_pre.contains(try Semver.parse(testing.allocator, "0.2.0")));
+    try testing.expect(!range_pre.contains(try Semver.parse(testing.allocator, "0.4.0")));
+    try testing.expect(!range_pre.contains(try Semver.parse(testing.allocator, "0.5.0")));
+    try testing.expect(range_pre.contains(try Semver.parse(testing.allocator, "0.4.2")));
+    try testing.expect(range_pre.contains(try Semver.parse(testing.allocator, "0.4.128")));
 
-    expect(!range_post.contains(try Semver.parse("1.2.0")));
-    expect(!range_post.contains(try Semver.parse("1.4.0")));
-    expect(!range_post.contains(try Semver.parse("2.0.0")));
-    expect(range_post.contains(try Semver.parse("1.5.0")));
-    expect(range_post.contains(try Semver.parse("1.4.2")));
-    expect(range_post.contains(try Semver.parse("1.4.128")));
+    try testing.expect(!range_post.contains(try Semver.parse(testing.allocator, "1.2.0")));
+    try testing.expect(!range_post.contains(try Semver.parse(testing.allocator, "1.4.0")));
+    try testing.expect(!range_post.contains(try Semver.parse(testing.allocator, "2.0.0")));
+    try testing.expect(range_post.contains(try Semver.parse(testing.allocator, "1.5.0")));
+    try testing.expect(range_post.contains(try Semver.parse(testing.allocator, "1.4.2")));
+    try testing.expect(range_post.contains(try Semver.parse(testing.allocator, "1.4.128")));
 }
 
 pub const Range = struct {
@@ -120,14 +121,14 @@ pub const Range = struct {
         exact,
     };
 
-    const parser = map(
+    const parser = mecha.map(
         Range,
         toRange,
-        combine(.{
-            opt(
-                oneOf(.{
-                    utf8.range('~', '~'),
-                    utf8.range('^', '^'),
+        mecha.combine(.{
+            mecha.opt(
+                mecha.oneOf(.{
+                    mecha.utf8.range('~', '~'),
+                    mecha.utf8.range('^', '^'),
                 }),
             ),
             Semver.semver,
@@ -174,8 +175,8 @@ pub const Range = struct {
         };
     }
 
-    pub fn parse(str: []const u8) !Range {
-        return (parser(str) orelse return error.InvalidString).value;
+    pub fn parse(allocator: *Allocator, str: []const u8) !Range {
+        return (try parser(allocator, str)).value;
     }
 
     pub fn format(
@@ -199,7 +200,7 @@ pub const Range = struct {
 };
 
 test "empty string" {
-    expectError(error.InvalidString, Range.parse(""));
+    try testing.expectError(error.ParserFailed, Range.parse(testing.allocator, ""));
 }
 
 test "approximate" {
@@ -211,7 +212,7 @@ test "approximate" {
             .patch = 3,
         },
     };
-    expectEqual(expected, try Range.parse("~1.2.3"));
+    try testing.expectEqual(expected, try Range.parse(testing.allocator, "~1.2.3"));
 }
 
 test "caret" {
@@ -223,7 +224,7 @@ test "caret" {
             .patch = 3,
         },
     };
-    expectEqual(expected, try Range.parse("^1.2.3"));
+    try testing.expectEqual(expected, try Range.parse(testing.allocator, "^1.2.3"));
 }
 
 test "exact range" {
@@ -235,7 +236,7 @@ test "exact range" {
             .patch = 3,
         },
     };
-    expectEqual(expected, try Range.parse("1.2.3"));
+    try testing.expectEqual(expected, try Range.parse(testing.allocator, "1.2.3"));
 }
 
 test "range formatting: exact" {
@@ -251,7 +252,7 @@ test "range formatting: exact" {
     };
     try stream.writer().print("{}", .{range});
 
-    expectEqualStrings("1.2.3", stream.getWritten());
+    try testing.expectEqualStrings("1.2.3", stream.getWritten());
 }
 
 test "range formatting: approx" {
@@ -267,7 +268,7 @@ test "range formatting: approx" {
     };
     try stream.writer().print("{}", .{range});
 
-    expectEqualStrings("~1.2.3", stream.getWritten());
+    try testing.expectEqualStrings("~1.2.3", stream.getWritten());
 }
 
 test "range formatting: caret" {
@@ -283,5 +284,5 @@ test "range formatting: caret" {
     };
     try stream.writer().print("{}", .{range});
 
-    expectEqualStrings("^1.2.3", stream.getWritten());
+    try testing.expectEqualStrings("^1.2.3", stream.getWritten());
 }
