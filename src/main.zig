@@ -29,7 +29,7 @@ pub const Semver = struct {
         }),
     );
 
-    pub fn parse(allocator: *Allocator, str: []const u8) !Semver {
+    pub fn parse(allocator: Allocator, str: []const u8) !Semver {
         return (try single_parser(allocator, str)).value;
     }
 
@@ -175,7 +175,7 @@ pub const Range = struct {
         };
     }
 
-    pub fn parse(allocator: *Allocator, str: []const u8) !Range {
+    pub fn parse(allocator: Allocator, str: []const u8) !Range {
         return (try parser(allocator, str)).value;
     }
 
