@@ -190,7 +190,10 @@ pub const Range = struct {
         switch (self.kind) {
             .exact => try writer.print("{}", .{self.min}),
             .approx => try writer.print("~{}", .{self.min}),
-            .caret => try writer.print("^{}", .{self.min}),
+            .caret => if (fmt.len == 1 and fmt[0] == 'u')
+                try writer.print("%5E{}", .{self.min})
+            else
+                try writer.print("^{}", .{self.min}),
         }
     }
 

@@ -1,7 +1,7 @@
 const std = @import("std");
 const Builder = std.build.Builder;
 const Pkg = std.build.Pkg;
-const pkgs = @import("gyro").pkgs;
+const pkgs = @import("deps.zig").pkgs;
 
 pub fn build(b: *Builder) void {
     const mode = b.standardReleaseOptions();
